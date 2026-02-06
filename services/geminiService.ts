@@ -1,8 +1,18 @@
 import { GoogleGenAI } from "@google/genai";
 import { Loan, Borrower, Payment } from "../types";
 
-const apiKey = process.env.API_KEY || '';
-const ai = new GoogleGenAI({ apiKey });
+const getApiKey = () => {
+  // Try different possible env variables used by Vercel/Vite
+  return (import.meta as any).env?.VITE_GEMINI_API_KEY || (import.meta as any).env?.GEMINI_API_KEY || '';
+};
+
+let ai: GoogleGenAI | null = null;
+const getAI = () => {
+  const key = getApiKey();
+  if (!key) return null;
+  if (!ai) ai = new GoogleGenAI({ apiKey: key });
+  return ai;
+};
 
 export const generateCollectionMessage = async (
   borrowerName: string,
@@ -10,7 +20,9 @@ export const generateCollectionMessage = async (
   dueDate: string,
   tone: 'friendly' | 'firm' | 'urgent'
 ): Promise<string> => {
-  if (!apiKey) return "Error: API Key missing.";
+  const key = getApiKey();
+  const ai = getAI();
+  if (!key || !ai) return "Error: API Key missing.";
 
   const prompt = `
     Write a short SMS text message for a loan collection (5-6 lending style).
@@ -39,7 +51,9 @@ export const analyzeBorrowerRisk = async (
   loans: Loan[],
   payments: Payment[]
 ): Promise<{ riskLevel: string; analysis: string }> => {
-  if (!apiKey) return { riskLevel: 'Unknown', analysis: 'API Key missing.' };
+  const key = getApiKey();
+  const ai = getAI();
+  if (!key || !ai) return { riskLevel: 'Unknown', analysis: 'API Key missing.' };
 
   const historySummary = loans.map(l => ({
     amount: l.total_payable,
@@ -66,10 +80,10 @@ export const analyzeBorrowerRisk = async (
         responseMimeType: 'application/json'
       }
     });
-    
+
     const text = response.text;
     if (!text) throw new Error("No response");
-    
+
     return JSON.parse(text);
   } catch (error) {
     console.error("Gemini Error:", error);
